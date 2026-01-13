@@ -1,0 +1,408 @@
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.util.ArrayList;
+
+/* ================= PRODUCT ================= */
+class Product {
+    private String nama;
+    private String kategori;
+    private double hargaSatuan;
+    private int isiPack;
+    private int stok;
+    private boolean isPack;
+
+    public Product(String nama, String kategori, double hargaSatuan, int isiPack, int stok, boolean isPack) {
+        this.nama = nama;
+        this.kategori = kategori;
+        this.hargaSatuan = hargaSatuan;
+        this.isiPack = isiPack;
+        this.stok = stok;
+        this.isPack = isPack;
+    }
+
+    public String getNama() { return nama; }
+    public String getKategori() { return kategori; }
+    public double getHargaSatuan() { return hargaSatuan; }
+    public int getIsiPack() { return isiPack; }
+    public int getStok() { return stok; }
+    public boolean isPack() { return isPack; }
+
+    public void tambahStok(int qty, boolean pack) {
+        if (pack) stok += qty * isiPack;
+        else stok += qty;
+    }
+
+    public boolean kurangiStok(int qty) {
+        if (qty <= stok) { stok -= qty; return true; }
+        return false;
+    }
+
+    public int getStokPack() { return isiPack > 0 ? stok / isiPack : 0; }
+
+    @Override
+    public String toString() {
+        return nama + " (" + kategori + ") - Rp " + hargaSatuan;
+    }
+}
+
+/* ================= INVENTORY ================= */
+class Inventory {
+    private ArrayList<Product> products = new ArrayList<>();
+    public void tambahProduk(Product p) { products.add(p); }
+    public ArrayList<Product> getProducts() { return products; }
+}
+
+/* ================= CART ITEM ================= */
+class CartItem {
+    Product product;
+    int qty;
+    boolean isPack;
+
+    public CartItem(Product product, int qty, boolean isPack) {
+        this.product = product;
+        this.qty = qty;
+        this.isPack = isPack;
+    }
+
+    public int getTotalItem() { return isPack ? qty * product.getIsiPack() : qty; }
+    public double getSubtotal() { return getTotalItem() * product.getHargaSatuan(); }
+}
+
+/* ================= KASIR GUI FINAL ================= */
+class KasirGUI extends JFrame {
+    private Inventory inventory;
+    private JComboBox<Product> cmbProduk;
+    private JTextField txtQty, txtBayar, txtSearch;
+    private JRadioButton rbSatuan, rbPack;
+    private JTextArea areaStruk;
+    private ArrayList<CartItem> cart = new ArrayList<>();
+    private JLabel lblTotal;
+    private javax.swing.event.DocumentListener searchListener;
+
+    public KasirGUI(Inventory inventory) {
+        this.inventory = inventory;
+        setTitle("Kasir");
+        setSize(600,600);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout(10,10));
+
+        JPanel panelInput = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5,5,5,5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        txtQty = new JTextField();
+        txtBayar = new JTextField();
+        rbSatuan = new JRadioButton("Satuan", true);
+        rbPack = new JRadioButton("Pack");
+        ButtonGroup group = new ButtonGroup();
+        group.add(rbSatuan); group.add(rbPack);
+
+        cmbProduk = new JComboBox<>();
+        cmbProduk.setEditable(false); // Non-editable, karena ada kolom search terpisah
+
+        // ===== KOLOM PENCARIAN TERPISAH =====
+        txtSearch = new JTextField();
+        searchListener = new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { searchProduk(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { searchProduk(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { searchProduk(); }
+
+            private void searchProduk() {
+                String keyword = txtSearch.getText().toLowerCase();
+                cmbProduk.removeAllItems();
+                for(Product p : inventory.getProducts())
+                    if(p.getNama().toLowerCase().contains(keyword)) cmbProduk.addItem(p);
+            }
+        };
+        txtSearch.getDocument().addDocumentListener(searchListener);
+
+        refreshProduk(); // tampilkan semua produk awal
+
+        // ===== LABEL TOTAL =====
+        lblTotal = new JLabel("Total: Rp 0");
+        lblTotal.setFont(new Font("Arial", Font.BOLD, 14));
+
+        // ===== TAMBAH COMPONENT =====
+        gbc.gridx=0; gbc.gridy=0; panelInput.add(new JLabel("Cari Produk"), gbc);
+        gbc.gridx=1; gbc.gridy=0; panelInput.add(txtSearch, gbc);
+        gbc.gridx=0; gbc.gridy=1; panelInput.add(new JLabel("Produk"), gbc);
+        gbc.gridx=1; gbc.gridy=1; panelInput.add(cmbProduk, gbc);
+        gbc.gridx=0; gbc.gridy=2; panelInput.add(new JLabel("Jumlah"), gbc);
+        gbc.gridx=1; gbc.gridy=2; panelInput.add(txtQty, gbc);
+        gbc.gridx=0; gbc.gridy=3; panelInput.add(rbSatuan, gbc);
+        gbc.gridx=1; gbc.gridy=3; panelInput.add(rbPack, gbc);
+        gbc.gridx=0; gbc.gridy=4; panelInput.add(lblTotal, gbc); // Total ditampilkan di sini
+        gbc.gridx=0; gbc.gridy=5; panelInput.add(new JLabel("Uang Bayar"), gbc);
+        gbc.gridx=1; gbc.gridy=5; panelInput.add(txtBayar, gbc);
+
+        JPanel panelTombol = new JPanel(new FlowLayout(FlowLayout.CENTER,10,0));
+        JButton btnTambah = new JButton("Tambah"); 
+        JButton btnBayar = new JButton("Bayar");
+        JButton btnRefresh = new JButton("Refresh");
+        JButton btnClearCart = new JButton("Clear Cart");
+        panelTombol.add(btnTambah); panelTombol.add(btnBayar); panelTombol.add(btnRefresh); panelTombol.add(btnClearCart);
+        gbc.gridx=0; gbc.gridy=6; gbc.gridwidth=2; panelInput.add(panelTombol, gbc);
+
+        add(panelInput, BorderLayout.NORTH);
+
+        areaStruk = new JTextArea();
+        areaStruk.setEditable(false);
+        JScrollPane scrollStruk = new JScrollPane(areaStruk);
+        add(scrollStruk, BorderLayout.CENTER);
+
+        // ===== EVENT =====
+        btnTambah.addActionListener(e -> tambahKeranjang());
+        btnBayar.addActionListener(e -> prosesBayar());
+        btnRefresh.addActionListener(e -> refreshProduk());
+        btnClearCart.addActionListener(e -> clearCart());
+
+        setVisible(true);
+    }
+
+    // ===== REFRESH PRODUK FINAL =====
+    public void refreshProduk() {
+        // Nonaktifkan listener sementara
+        txtSearch.getDocument().removeDocumentListener(searchListener);
+
+        cmbProduk.removeAllItems();
+        for(Product p: inventory.getProducts()) cmbProduk.addItem(p);
+
+        // Reset search
+        txtSearch.setText("");
+
+        // Aktifkan kembali listener
+        txtSearch.getDocument().addDocumentListener(searchListener);
+    }
+
+    private void tambahKeranjang() {
+        try {
+            Product p = (Product)cmbProduk.getSelectedItem();
+            int qty = Integer.parseInt(txtQty.getText());
+            boolean isPack = rbPack.isSelected();
+            if(p==null || qty<=0 || qty*(isPack?p.getIsiPack():1)>p.getStok()) {
+                JOptionPane.showMessageDialog(this,"Stok tidak cukup / input salah");
+                return;
+            }
+            CartItem item = new CartItem(p, qty, isPack);
+            cart.add(item);
+            areaStruk.append(p.getNama() + " (" + (isPack?"Pack":"Satuan") + ") x"+qty+" - Rp "+item.getSubtotal()+"\n");
+            txtQty.setText("");
+            updateTotal(); // Update total setiap tambah item
+        } catch(Exception e) { JOptionPane.showMessageDialog(this,"Input tidak valid"); }
+    }
+
+    private void updateTotal() {
+        double total = 0;
+        for(CartItem c: cart) total += c.getSubtotal();
+        lblTotal.setText("Total: Rp " + total);
+    }
+
+    private void clearCart() {
+        cart.clear();
+        areaStruk.setText("");
+        updateTotal();
+    }
+
+    private void prosesBayar() {
+        try {
+            double total = 0; for(CartItem c: cart) total += c.getSubtotal();
+            double bayar = Double.parseDouble(txtBayar.getText());
+            if(bayar<total){ JOptionPane.showMessageDialog(this,"Uang tidak cukup"); return; }
+            areaStruk.append("\nTotal   : Rp "+total);
+            areaStruk.append("\nBayar   : Rp "+bayar);
+            areaStruk.append("\nKembali : Rp "+(bayar-total));
+            areaStruk.append("\n========================\n");
+            for(CartItem c: cart) c.product.kurangiStok(c.getTotalItem());
+            cart.clear(); updateTotal(); refreshProduk();
+            txtBayar.setText("");
+        } catch(Exception e){ JOptionPane.showMessageDialog(this,"Pembayaran gagal"); }
+    }
+}
+
+/* ================= STOCK GUI ================= */
+class StockGUI extends JFrame {
+    private Inventory inventory;
+    private DefaultTableModel tableModel;
+    private JTable table;
+    private KasirGUI kasir;
+
+    public StockGUI(Inventory inventory, KasirGUI kasir) {
+        this.inventory = inventory;
+        this.kasir = kasir;
+        setTitle("Manajemen Stok Barang");
+        setSize(900,500);
+        setLocationRelativeTo(null);
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLayout(new BorderLayout(10,10));
+
+        String[] kolom = {"Nama","Kategori","Harga Satuan","Isi Pack","Stok Satuan","Stok Pack"};
+        tableModel = new DefaultTableModel(kolom,0);
+        table = new JTable(tableModel);
+        add(new JScrollPane(table), BorderLayout.CENTER);
+
+        JPanel panelForm = new JPanel();
+        panelForm.setLayout(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(5,5,5,5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        JTextField txtNama = new JTextField();
+        JTextField txtKategori = new JTextField();
+        JTextField txtHarga = new JTextField();
+        JTextField txtIsiPack = new JTextField();
+        JTextField txtStok = new JTextField();
+
+        JRadioButton rbSatuan = new JRadioButton("Satuan", true);
+        JRadioButton rbPack = new JRadioButton("Pack");
+        ButtonGroup group = new ButtonGroup(); group.add(rbSatuan); group.add(rbPack);
+
+        gbc.gridx=0; gbc.gridy=0; panelForm.add(new JLabel("Nama"), gbc);
+        gbc.gridx=1; gbc.gridy=0; panelForm.add(txtNama, gbc);
+        gbc.gridx=0; gbc.gridy=1; panelForm.add(new JLabel("Kategori"), gbc);
+        gbc.gridx=1; gbc.gridy=1; panelForm.add(txtKategori, gbc);
+        gbc.gridx=0; gbc.gridy=2; panelForm.add(new JLabel("Harga Satuan"), gbc);
+        gbc.gridx=1; gbc.gridy=2; panelForm.add(txtHarga, gbc);
+        gbc.gridx=0; gbc.gridy=3; panelForm.add(new JLabel("Isi Pack"), gbc);
+        gbc.gridx=1; gbc.gridy=3; panelForm.add(txtIsiPack, gbc);
+        gbc.gridx=0; gbc.gridy=4; panelForm.add(new JLabel("Jumlah"), gbc);
+        gbc.gridx=1; gbc.gridy=4; panelForm.add(txtStok, gbc);
+        gbc.gridx=0; gbc.gridy=5; panelForm.add(rbSatuan, gbc);
+        gbc.gridx=1; gbc.gridy=5; panelForm.add(rbPack, gbc);
+
+        JPanel panelTombol = new JPanel(new FlowLayout());
+        JButton btnTambah = new JButton("Tambah");
+        JButton btnUpdate = new JButton("Update");
+        JButton btnTambahStok = new JButton("Tambah Stok");
+        JButton btnDelete = new JButton("Hapus");
+        panelTombol.add(btnTambah); panelTombol.add(btnUpdate);
+        panelTombol.add(btnTambahStok); panelTombol.add(btnDelete);
+
+        gbc.gridx=0; gbc.gridy=6; gbc.gridwidth=2; panelForm.add(panelTombol, gbc);
+
+        add(panelForm, BorderLayout.EAST);
+
+        table.getSelectionModel().addListSelectionListener(e -> {
+            int row = table.getSelectedRow();
+            if(row>=0){
+                txtNama.setText((String)table.getValueAt(row,0));
+                txtKategori.setText((String)table.getValueAt(row,1));
+                txtHarga.setText(table.getValueAt(row,2).toString());
+                txtIsiPack.setText(table.getValueAt(row,3).toString());
+                txtStok.setText(table.getValueAt(row,4).toString());
+                if(table.getValueAt(row,6).equals("Pack")) rbPack.setSelected(true);
+                else rbSatuan.setSelected(true);
+            }
+        });
+
+        btnTambah.addActionListener(e -> {
+            try{
+                double harga = Double.parseDouble(txtHarga.getText());
+                int isi = Integer.parseInt(txtIsiPack.getText());
+                int stok = Integer.parseInt(txtStok.getText());
+                boolean isPack = rbPack.isSelected();
+
+                Product p = new Product(
+                    txtNama.getText(),
+                    txtKategori.getText(),
+                    harga,
+                    isi,
+                    isPack ? stok * isi : stok,
+                    isPack
+                );
+
+                inventory.tambahProduk(p);
+                tambahRow(p);
+
+                if(kasir != null) kasir.refreshProduk();
+
+                // ===== RESET FORM (INI KUNCINYA) =====
+                txtNama.setText("");
+                txtKategori.setText("");
+                txtHarga.setText("");
+                txtIsiPack.setText("");
+                txtStok.setText("");
+                rbSatuan.setSelected(true);
+                table.clearSelection();
+                txtNama.requestFocus();
+
+            } catch(Exception ex){
+                JOptionPane.showMessageDialog(this,"Input tidak valid");
+            }
+        });
+
+
+        btnUpdate.addActionListener(e -> {
+            int row = table.getSelectedRow();
+            if(row>=0){
+                Product p = inventory.getProducts().get(row);
+                try{
+                    double harga = Double.parseDouble(txtHarga.getText());
+                    int isi = Integer.parseInt(txtIsiPack.getText());
+                    int stok = Integer.parseInt(txtStok.getText());
+                    boolean isPack = rbPack.isSelected();
+                    Product updated = new Product(txtNama.getText(), txtKategori.getText(), harga, isi, isPack?stok*isi:stok, isPack);
+                    inventory.getProducts().set(row, updated);
+                    updateRow(row, updated);
+                    if(kasir!=null) kasir.refreshProduk();
+                }catch(Exception ex){ JOptionPane.showMessageDialog(this,"Input tidak valid"); }
+            }else JOptionPane.showMessageDialog(this,"Pilih barang untuk update");
+        });
+
+        btnTambahStok.addActionListener(e -> {
+            int row = table.getSelectedRow();
+            if(row>=0){
+                Product p = inventory.getProducts().get(row);
+                try{
+                    int qty = Integer.parseInt(txtStok.getText());
+                    boolean isPack = rbPack.isSelected();
+                    p.tambahStok(qty,isPack);
+                    updateRow(row,p);
+                    if(kasir!=null) kasir.refreshProduk();
+                }catch(Exception ex){ JOptionPane.showMessageDialog(this,"Input tidak valid"); }
+            }else JOptionPane.showMessageDialog(this,"Pilih barang untuk tambah stok");
+        });
+
+        btnDelete.addActionListener(e -> {
+            int row = table.getSelectedRow();
+            if(row>=0){
+                Product p = inventory.getProducts().get(row);
+                int konfirmasi = JOptionPane.showConfirmDialog(this,"Yakin hapus "+p.getNama()+"?","Konfirmasi",JOptionPane.YES_NO_OPTION);
+                if(konfirmasi==JOptionPane.YES_OPTION){
+                    inventory.getProducts().remove(row);
+                    tableModel.removeRow(row);
+                    if(kasir!=null) kasir.refreshProduk();
+                }
+            }else JOptionPane.showMessageDialog(this,"Pilih barang untuk dihapus");
+        });
+
+        setVisible(true);
+    }
+
+    private void tambahRow(Product p){
+        tableModel.addRow(new Object[]{p.getNama(),p.getKategori(),p.getHargaSatuan(),p.getIsiPack(),p.getStok(),p.getStokPack(),p.isPack()?"Pack":"Satuan"});
+    }
+
+    private void updateRow(int row, Product p){
+        tableModel.setValueAt(p.getNama(), row,0);
+        tableModel.setValueAt(p.getKategori(), row,1);
+        tableModel.setValueAt(p.getHargaSatuan(), row,2);
+        tableModel.setValueAt(p.getIsiPack(), row,3);
+        tableModel.setValueAt(p.getStok(), row,4);
+        tableModel.setValueAt(p.getStokPack(), row,5);
+        tableModel.setValueAt(p.isPack()?"Pack":"Satuan", row,6);
+    }
+}
+
+/* ================= MAIN ================= */
+public class TokoApp {
+    public static void main(String[] args){
+        Inventory inventory = new Inventory();
+        SwingUtilities.invokeLater(() -> {
+            KasirGUI kasir = new KasirGUI(inventory);
+            new StockGUI(inventory, kasir);
+        });
+    }
+} 
